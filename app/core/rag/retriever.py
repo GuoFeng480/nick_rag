@@ -7,11 +7,11 @@ from typing import Any, Dict, List, Optional
 from langchain_core.documents import Document
 
 from app.api.vector_db.base_vector import BaseVector
-from app.api.vector_db.chroma_client import ChromaVectorDB
 from app.config.settings import Settings, get_settings
 from app.api.embedding.base_embedding import BaseEmbedding
 from app.api.embedding.hunyuan import get_embeddings
 from app.core.db.preset_questions import PresetQuestionStore
+from app.config.vector_schema import documents as documents_table
 
 
 class VectorRetriever:
@@ -40,6 +40,7 @@ class VectorRetriever:
 		settings: Optional[Settings] = None,
 		collection_name: Optional[str] = None,
 		embedding: Optional[BaseEmbedding] = None,
+		table_config: Optional[Any] = None,
 	) -> "VectorRetriever":
 		"""根据配置构建检索器。
 
@@ -50,10 +51,13 @@ class VectorRetriever:
 		"""
 		cfg = settings or get_settings()
 		embeddings = embedding or get_embeddings(cfg)
-		vector_db = ChromaVectorDB(
+		collection = collection_name or documents_table.COLLECTION_NAME
+		resolved_table = table_config or documents_table
+		vector_db = BaseVector.from_settings(
 			embedding_function=embeddings,
 			settings=cfg,
-			collection_name=collection_name,
+			collection_name=collection,
+			table_config=resolved_table,
 		)
 		return cls(vector_db=vector_db, settings=cfg)
 

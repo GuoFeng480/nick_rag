@@ -41,11 +41,57 @@ python scripts/ingest_documents.py /path/to/docs \
 python scripts/ingest_presets.py
 ```
 
+## 向量库初始化（tcvectordb）
+
+用于手动创建数据库与集合（按配置生成索引）：
+
+```bash
+python scripts/setup_tcvector_db.py
+```
+
+可选参数：
+
+```bash
+python scripts/setup_tcvector_db.py --collection preset_questions --dimension 768
+```
+
 ## 数据表
 
 - rag_documents：文档级元数据表（含 vector_id）
 - preset_questions：预设问题表（含 answer、vector_id）
 - rag_user_questions：用户问题与回答记录表
+
+## 配置说明
+
+向量数据库可通过环境变量切换：
+
+```bash
+# 默认使用 chroma，可选 tencent
+VECTOR_DB_BACKEND=chroma
+```
+
+当使用 tcvectordb 时，需要配置以下变量：
+
+```bash
+# 连接与认证（* 为必填）
+TENCENT_VDB_URL=
+TENCENT_VDB_USERNAME=
+TENCENT_VDB_KEY=
+TENCENT_VDB_PASSWORD=
+
+# 读一致性与连接参数
+TENCENT_VDB_READ_CONSISTENCY=eventualConsistency
+TENCENT_VDB_TIMEOUT=10
+TENCENT_VDB_POOL_SIZE=10
+
+# 业务库（* 为必填）
+TENCENT_VDB_DATABASE=
+```
+
+集合/索引/字段配置在以下常量文件中管理：
+
+- [app/config/vector_schema/documents.py](app/config/vector_schema/documents.py)
+- [app/config/vector_schema/preset_questions.py](app/config/vector_schema/preset_questions.py)
 
 ## 核心
 

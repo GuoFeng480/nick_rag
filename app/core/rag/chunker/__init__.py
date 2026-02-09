@@ -2,5 +2,6 @@
 
 from .base_chunker import Chunker
 from .default_chunker import DefaultChunker
+from .unstructured_chunker import UnstructuredChunker
 
-__all__ = ["Chunker", "DefaultChunker"]
+__all__ = ["Chunker", "DefaultChunker", "UnstructuredChunker"]

@@ -81,7 +81,7 @@ class RAGEngine:
 			在同一链路中捕获 prompt，避免重复构建。
 		"""
 		# 1) 准备 prompt 捕获容器，用于记录本次请求的最终 prompt 文本
-		captured: Dict[str, str] = {"prompt": "", "session_id": session_id}
+		captured: Dict[str, Any] = {"prompt": "", "session_id": session_id}
 
 		# 2) 构建 prompt 模板：system/历史/human 三段
 		#    - system: 全局约束与回答策略
@@ -104,6 +104,7 @@ class RAGEngine:
 				standalone_question,
 				filter=doc_filter,
 			)
+			captured["retrieved_metadata"] = [doc.metadata for doc in docs]
 			return _format_docs(docs)
 
 		# 4) 捕获 prompt：在链路中记录渲染后的 prompt 文本

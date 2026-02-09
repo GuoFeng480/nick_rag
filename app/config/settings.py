@@ -24,7 +24,6 @@ class Settings:
 	hunyuan_model: str
 	hunyuan_endpoint: str
 
-	chroma_collection: str
 	chroma_host: str
 	chroma_port: int
 	chroma_ssl: bool
@@ -32,9 +31,18 @@ class Settings:
 	chroma_database: str
 	chroma_api_key: str
 	chroma_auth_header: str
-	preset_questions_collection: str
 	preset_top_k: int
 	preset_max_distance: float
+
+	
+	tencent_vdb_url: str
+	tencent_vdb_username: str
+	tencent_vdb_key: str
+	tencent_vdb_password: str
+	tencent_vdb_read_consistency: str
+	tencent_vdb_timeout: int
+	tencent_vdb_pool_size: int
+	tencent_vdb_database: str
 
 	postgres_dsn: str
 
@@ -42,6 +50,7 @@ class Settings:
 	chunk_size: int
 	chunk_overlap: int
 	top_k: int
+	vector_db_backend: str
 
 
 @lru_cache(maxsize=1)
@@ -58,7 +67,6 @@ def get_settings() -> Settings:
 		hunyuan_region=get_env("HUNYUAN_REGION", default="ap-guangzhou"),
 		hunyuan_model=get_env("HUNYUAN_MODEL", default="hunyuan-turbo"),
 		hunyuan_endpoint=get_env("HUNYUAN_ENDPOINT", default="hunyuan.tencentcloudapi.com"),
-		chroma_collection=get_env("CHROMA_COLLECTION", default="rag_default"),
 		chroma_host=get_env("CHROMA_HOST", default=""),
 		chroma_port=get_int("CHROMA_PORT", 8000),
 		chroma_ssl=get_bool("CHROMA_SSL", False),
@@ -66,10 +74,6 @@ def get_settings() -> Settings:
 		chroma_database=get_env("CHROMA_DATABASE", default=""),
 		chroma_api_key=get_env("CHROMA_API_KEY", default=""),
 		chroma_auth_header=get_env("CHROMA_AUTH_HEADER", default="Authorization"),
-		preset_questions_collection=get_env(
-			"PRESET_QUESTIONS_COLLECTION",
-			default="preset_questions",
-		),
 		preset_top_k=get_int("PRESET_TOP_K", 1),
 		preset_max_distance=get_float("PRESET_MAX_DISTANCE", 0.35),
 		postgres_dsn=get_env(
@@ -83,5 +87,17 @@ def get_settings() -> Settings:
 		chunk_size=get_int("CHUNK_SIZE", 800),
 		chunk_overlap=get_int("CHUNK_OVERLAP", 120),
 		top_k=get_int("TOP_K", 4),
+		vector_db_backend=get_env("VECTOR_DB_BACKEND", default="chroma"),
+		tencent_vdb_url=get_env("TENCENT_VDB_URL", default=""),
+		tencent_vdb_username=get_env("TENCENT_VDB_USERNAME", default=""),
+		tencent_vdb_key=get_env("TENCENT_VDB_KEY", default=""),
+		tencent_vdb_password=get_env("TENCENT_VDB_PASSWORD", default=""),
+		tencent_vdb_read_consistency=get_env(
+			"TENCENT_VDB_READ_CONSISTENCY",
+			default="eventualConsistency",
+		),
+		tencent_vdb_timeout=get_int("TENCENT_VDB_TIMEOUT", 10),
+		tencent_vdb_pool_size=get_int("TENCENT_VDB_POOL_SIZE", 10),
+		tencent_vdb_database=get_env("TENCENT_VDB_DATABASE", default=""),
 	)
 

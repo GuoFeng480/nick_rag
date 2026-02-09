@@ -6,13 +6,13 @@ import hashlib
 import os
 from typing import Any, Dict, Iterable, List, Optional
 
-from app.core.rag.chunker import Chunker, DefaultChunker
+from app.core.rag.chunker import Chunker, UnstructuredChunker
 
 from app.api.embedding.hunyuan import get_embeddings
 from app.api.vector_db.base_vector import BaseVector
-from app.api.vector_db.chroma_client import ChromaVectorDB
 from app.config.settings import Settings, get_settings
 from app.core.db.rag_documents import RagDocumentStore
+from app.config.vector_schema import documents as documents_table
 from unstructured.partition.auto import partition
 
 
@@ -38,14 +38,17 @@ class DocumentEmbedder:
         """
         self.settings = settings or get_settings()
         if vector_db is None:
-            self.vector_db = ChromaVectorDB(
+            collection_name = documents_table.COLLECTION_NAME
+            self.vector_db = BaseVector.from_settings(
                 embedding_function=get_embeddings(self.settings),
                 settings=self.settings,
+                collection_name=collection_name,
+                table_config=documents_table,
             )
         else:
             self.vector_db = vector_db
         self.metadata_store = metadata_store or RagDocumentStore(self.settings)
-        self.chunker = chunker or DefaultChunker.from_settings(self.settings)
+        self.chunker = chunker or UnstructuredChunker()
 
     def ingest_pdf(self, file_path: str, doc_info: Optional[Dict[str, Any]] = None) -> int:
         """解析并入库 PDF 文档。
@@ -149,8 +152,21 @@ class DocumentEmbedder:
                     yield file_path
 
     def _load_file_elements(self, file_path: str) -> List[Any]:
-        """使用 Unstructured 解析文件并返回元素列表。"""
-        return list(partition(filename=file_path))
+        """使用 Unstructured 解析文件并返回元素列表。
+
+        说明:
+            由 Unstructured 负责切分策略，避免二次切分。
+        """
+        return list(
+            partition(
+                filename=file_path,
+                chunking_strategy="by_title",
+                max_characters=self.settings.chunk_size,
+                new_after_n_chars=self.settings.chunk_size,
+                combine_text_under_n_chars=max(200, int(self.settings.chunk_size * 0.5)),
+                overlap=self.settings.chunk_overlap,
+            )
+        )
 
     def _resolve_doc_id(self, source: str, doc_info: Optional[Dict[str, Any]]) -> int:
         """确定文档 ID。

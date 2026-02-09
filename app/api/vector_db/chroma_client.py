@@ -1,4 +1,4 @@
-"""Chroma vector store wrapper."""
+"""Chroma 向量库封装。"""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ class ChromaVectorDB(BaseVector):
         embedding_function: BaseEmbedding,
         settings: Optional[Settings] = None,
         collection_name: Optional[str] = None,
+        table_config: Optional[Any] = None,
     ) -> None:
         """初始化 Chroma 客户端与集合。
 
@@ -30,8 +31,10 @@ class ChromaVectorDB(BaseVector):
             embedding_function: Embedding 接口实现。
             settings: 配置对象，包含 Chroma 连接信息。
             collection_name: 可选集合名，默认使用配置。
+            table_config: 表配置（Chroma 忽略，仅用于统一接口）。
         """
         self.settings = settings or get_settings()
+        _ = table_config
         if embedding_function is None:
             raise ValueError("embedding_function is required (use Hunyuan embeddings)")
         client = None
@@ -47,8 +50,10 @@ class ChromaVectorDB(BaseVector):
                 tenant=self.settings.chroma_tenant or None,
                 database=self.settings.chroma_database or None,
             )
+        if not collection_name:
+            raise ValueError("collection_name is required for ChromaVectorDB")
         self.store = Chroma(
-            collection_name=collection_name or self.settings.chroma_collection,
+            collection_name=collection_name,
             embedding_function=embedding_function,
             client=client,
         )
@@ -95,3 +100,7 @@ class ChromaVectorDB(BaseVector):
             得分为 Chroma 返回的距离/相似度，具体含义由配置决定。
         """
         return self.store.similarity_search_with_score(query, k=k, filter=filter)
+
+
+
+BaseVector.register_backend("chroma", ChromaVectorDB)

@@ -6,9 +6,9 @@ from typing import Optional
 
 from app.api.embedding.hunyuan import get_embeddings
 from app.api.vector_db.base_vector import BaseVector
-from app.api.vector_db.chroma_client import ChromaVectorDB
 from app.config.settings import Settings, get_settings
 from app.core.db.preset_questions import PresetQuestionStore
+from app.config.vector_schema import preset_questions as preset_table
 
 
 class PresetEmbedder:
@@ -32,10 +32,12 @@ class PresetEmbedder:
         """
         self.settings = settings or get_settings()
         if vector_db is None:
-            self.vector_db = ChromaVectorDB(
+            collection_name = preset_table.COLLECTION_NAME
+            self.vector_db = BaseVector.from_settings(
                 embedding_function=get_embeddings(self.settings),
                 settings=self.settings,
-                collection_name=self.settings.preset_questions_collection,
+                collection_name=collection_name,
+                table_config=preset_table,
             )
         else:
             self.vector_db = vector_db

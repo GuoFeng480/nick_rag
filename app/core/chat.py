@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from app.config.settings import Settings, get_settings
 from app.core.db.user_questions import UserQuestionStore
 from app.core.db.preset_questions import PresetQuestionStore
+from app.core.rag.process_tracker import ProcessTracker
 from app.core.rag.metadata_helper import MetadataHelper
 from app.core.rag.rag_engine import RAGEngine
 from app.core.rag.retriever import VectorRetriever
+from app.config.vector_schema import documents as documents_table
+from app.config.vector_schema import preset_questions as preset_table
 
 
 class ChatService:
@@ -40,10 +43,16 @@ class ChatService:
 		)
 		self.preset_retriever = preset_retriever or VectorRetriever.from_settings(
 			self.settings,
-			collection_name=self.settings.preset_questions_collection,
+			collection_name=preset_table.COLLECTION_NAME,
+			table_config=preset_table,
 		)
 		self.preset_store = preset_store or PresetQuestionStore(self.settings)
 		self.question_store = question_store or UserQuestionStore(self.settings)
+		self.process_tracker = ProcessTracker(
+			settings=self.settings,
+			documents_table=documents_table,
+			preset_table=preset_table,
+		)
 
 	def answer(
 		self,
@@ -62,18 +71,7 @@ class ChatService:
 		analysis = MetadataHelper.build_filter(question)
 		doc_filter = analysis["filter"]
 		# 2) 初始化进度日志结构
-		process_track: Dict[str, Any] = {
-			"doc_filter": doc_filter,
-			"config": {
-				"top_k": self.settings.top_k,
-				"chroma_collection": self.settings.chroma_collection,
-				"preset_top_k": self.settings.preset_top_k,
-				"preset_max_distance": self.settings.preset_max_distance,
-				"preset_collection": self.settings.preset_questions_collection,
-			},
-			"preset": {"matched": False},
-			"rag": None,
-		}
+		process_track = self.process_tracker.build(doc_filter)
 		# 3) 记录问题基础信息
 		record = self.question_store.create_question(
 			question=question,
@@ -88,11 +86,7 @@ class ChatService:
 		)
 		if preset_match:
 			# 5) 命中预设问题，写入进度与回答
-			process_track["preset"] = {
-				"matched": True,
-				"preset_id": preset_match.get("preset_id"),
-				"score": preset_match.get("score"),
-			}
+			self.process_tracker.record_preset_match(process_track, preset_match)
 			self.question_store.update_answer(
 				record.id,
 				answer=str(preset_match.get("answer", "")),
@@ -107,10 +101,7 @@ class ChatService:
 			session_id=session_id,
 			doc_filter=doc_filter or None,
 		)
-		process_track["rag"] = {
-			"captured": captured,
-			"llm_model": self.settings.hunyuan_model,
-		}
+		self.process_tracker.record_rag(process_track, captured, self.settings.hunyuan_model)
 		self.question_store.update_answer(
 			record.id,
 			answer=answer,

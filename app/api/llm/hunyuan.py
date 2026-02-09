@@ -1,6 +1,6 @@
-"""
-hunyuan 模块
-功能：hunyuan
+"""腾讯混元 LLM 客户端实现。
+
+封装对话接口的请求与响应解析，提供文本输出能力。
 """
 
 from __future__ import annotations
