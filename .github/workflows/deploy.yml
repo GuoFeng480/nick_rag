@@ -1,5 +1,6 @@
 # Deploy to cloud server via SSH + rsync
 # Required secrets: SSH_PRIVATE_KEY, SERVER_HOST, SERVER_USER
+# Node.js, PM2, and pm2-logrotate are auto-installed on server if missing (requires sudo for apt/npm)
 
 name: Deploy to Server
 
@@ -31,6 +32,19 @@ jobs:
              test -d /home/ubuntu/nick_rag && test -w /home/ubuntu/nick_rag || \
              (echo "Error: deploy path /home/ubuntu/nick_rag is missing or not writable"; exit 1)'
 
+      - name: Ensure Node.js, PM2 and pm2-logrotate on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'export DEBIAN_FRONTEND=noninteractive && \
+             if ! command -v node >/dev/null 2>&1; then \
+               curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs; \
+             fi && \
+             if ! command -v pm2 >/dev/null 2>&1; then \
+               sudo npm install -g pm2; \
+             fi && \
+             pm2 install pm2-logrotate 2>/dev/null || true'
+
       - name: Backup .env and clear app directory on server
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
@@ -61,15 +75,32 @@ jobs:
             ./ \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/ubuntu/nick_rag/"
 
-      - name: Install dependencies and start application on server
+      - name: Install dependencies on server
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
             'cd /home/ubuntu/nick_rag && \
              python3 -m venv .venv && \
-             .venv/bin/pip install -q -r requirements.txt && \
-             pkill -f "uvicorn app.main:app" 2>/dev/null || true && \
-             nohup .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/nick_rag.log 2>&1 & \
+             .venv/bin/pip install -q -r requirements.txt'
+
+      - name: Setup PM2 log rotation (daily, retain 30 days)
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "pm2 install pm2-logrotate 2>/dev/null || true && \
+             pm2 set pm2-logrotate:retain 30 && \
+             pm2 set pm2-logrotate:rotateInterval '0 0 * * *' && \
+             pm2 set pm2-logrotate:max_size 0"
+
+      - name: Start or restart application with PM2
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'cd /home/ubuntu/nick_rag && \
+             (pm2 restart nick_rag --update-env || \
+              pm2 start .venv/bin/uvicorn --name nick_rag --cwd /home/ubuntu/nick_rag --interpreter none -- \
+                app.main:app --host 0.0.0.0 --port 8000) && \
+             pm2 save && \
              sleep 3'
 
       - name: Verify deployment (health check)
