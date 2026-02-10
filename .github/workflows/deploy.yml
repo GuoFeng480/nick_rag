@@ -6,7 +6,7 @@ name: Deploy to Server
 on:
   push:
     branches:
-      - main
+      - feature/rag-arch
   workflow_dispatch:
 
 jobs:
