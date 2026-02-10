@@ -1,0 +1,87 @@
+# Deploy to cloud server via SSH + rsync
+# Required secrets: SSH_PRIVATE_KEY, SERVER_HOST, SERVER_USER
+
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key and known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Ensure deploy path exists on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'mkdir -p /home/ubuntu/nick_rag && \
+             test -d /home/ubuntu/nick_rag && test -w /home/ubuntu/nick_rag || \
+             (echo "Error: deploy path /home/ubuntu/nick_rag is missing or not writable"; exit 1)'
+
+      - name: Backup .env and clear app directory on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'mkdir -p /home/ubuntu/nick_rag && \
+             if [ -f /home/ubuntu/nick_rag/.env ]; then \
+               cp /home/ubuntu/nick_rag/.env /home/ubuntu/.env.backup; \
+             fi && \
+             find /home/ubuntu/nick_rag -mindepth 1 -maxdepth 1 -exec rm -rf {} +'
+
+      - name: Restore .env on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'if [ -f /home/ubuntu/.env.backup ]; then \
+               cp /home/ubuntu/.env.backup /home/ubuntu/nick_rag/.env; \
+             fi'
+
+      - name: Rsync code to server
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude='.env' \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='.venv' \
+            --exclude='venv' \
+            ./ \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/ubuntu/nick_rag/"
+
+      - name: Install dependencies and start application on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            'cd /home/ubuntu/nick_rag && \
+             python3 -m venv .venv && \
+             .venv/bin/pip install -q -r requirements.txt && \
+             pkill -f "uvicorn app.main:app" 2>/dev/null || true && \
+             nohup .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/nick_rag.log 2>&1 & \
+             sleep 3'
+
+      - name: Verify deployment (health check)
+        run: |
+          resp=$(curl -sf "http://${{ secrets.SERVER_HOST }}:8000/health" || true)
+          if echo "$resp" | grep -q '"status":"ok"'; then
+            echo "Deployment verified: /health returned ok"
+          else
+            echo "Health check failed. Response: $resp"
+            exit 1
+          fi
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
